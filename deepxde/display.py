@@ -14,27 +14,30 @@ class TrainingDisplay:
         self.len_metric = None
         self.is_header_print = False
 
-    def print_one(self, s1, s2, s3, s4):
-        print(
-            "{:{l1}s}{:{l2}s}{:{l3}s}{:{l4}s}".format(
-                s1,
-                s2,
-                s3,
-                s4,
-                l1=10,
-                l2=self.len_train,
-                l3=self.len_test,
-                l4=self.len_metric,
+    def print_one(self, s1, s2, s3, s4, tqdm_pbar=None):
+        if tqdm_pbar:
+            tqdm_pbar.set_postfix(train_loss=s2, test_loss=s3, test_metric=s4)
+        else:
+            print(
+                "{:{l1}s}{:{l2}s}{:{l3}s}{:{l4}s}".format(
+                    s1,
+                    s2,
+                    s3,
+                    s4,
+                    l1=10,
+                    l2=self.len_train,
+                    l3=self.len_test,
+                    l4=self.len_metric,
+                )
             )
-        )
-        sys.stdout.flush()
+            sys.stdout.flush()
 
     def header(self):
         self.print_one("Step", "Train loss", "Test loss", "Test metric")
         self.is_header_print = True
 
-    def __call__(self, train_state):
-        if not self.is_header_print:
+    def __call__(self, train_state, tqdm_pbar=None):
+        if not self.is_header_print and not tqdm_pbar:
             self.len_train = len(train_state.loss_train) * 10 + 4
             self.len_test = len(train_state.loss_test) * 10 + 4
             self.len_metric = len(train_state.metrics_test) * 10 + 4
@@ -44,6 +47,7 @@ class TrainingDisplay:
             list_to_str(train_state.loss_train),
             list_to_str(train_state.loss_test),
             list_to_str(train_state.metrics_test),
+            tqdm_pbar=tqdm_pbar,
         )
 
     def summary(self, train_state):
@@ -54,11 +58,7 @@ class TrainingDisplay:
         if train_state.best_ystd is not None:
             print("  Uncertainty:")
             print("    l2: {:g}".format(np.linalg.norm(train_state.best_ystd)))
-            print(
-                "    l_infinity: {:g}".format(
-                    np.linalg.norm(train_state.best_ystd, ord=np.inf)
-                )
-            )
+            print("    l_infinity: {:g}".format(np.linalg.norm(train_state.best_ystd, ord=np.inf)))
             print(
                 "    max uncertainty location:",
                 train_state.X_test[np.argmax(train_state.best_ystd)],

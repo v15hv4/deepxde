@@ -4,6 +4,7 @@ import pickle
 from collections import OrderedDict
 
 import numpy as np
+from tqdm import tqdm
 
 from . import config
 from . import display
@@ -509,6 +510,7 @@ class Model:
         callbacks=None,
         model_restore_path=None,
         model_save_path=None,
+        use_tqdm=False,
         epochs=None,
     ):
         """Trains the model.
@@ -528,6 +530,7 @@ class Model:
                 to apply during training.
             model_restore_path (String): Path where parameters were previously saved.
             model_save_path (String): Prefix of filenames created for the checkpoint.
+            use_tqdm (Boolean): Whether or not to use tqdm to display training progress.
             epochs (Integer): Deprecated alias to `iterations`. This will be removed in
                 a future version.
         """
@@ -558,7 +561,7 @@ class Model:
         self.stop_training = False
         self.train_state.set_data_train(*self.data.train_next_batch(self.batch_size))
         self.train_state.set_data_test(*self.data.test())
-        self._test()
+        if not use_tqdm: self._test()
         self.callbacks.on_train_begin()
         if optimizers.is_external_optimizer(self.opt_name):
             if backend_name == "tensorflow.compat.v1":
@@ -570,7 +573,7 @@ class Model:
         else:
             if iterations is None:
                 raise ValueError("No iterations for {}.".format(self.opt_name))
-            self._train_sgd(iterations, display_every)
+            self._train_sgd(iterations, display_every, use_tqdm)
         self.callbacks.on_train_end()
 
         print("")
@@ -579,8 +582,13 @@ class Model:
             self.save(model_save_path, verbose=1)
         return self.losshistory, self.train_state
 
-    def _train_sgd(self, iterations, display_every):
-        for i in range(iterations):
+    def _train_sgd(self, iterations, display_every, use_tqdm=False):
+        iterator = range(iterations)
+
+        if use_tqdm:
+            iterator = tqdm(iterator, unit="epoch")
+
+        for i in iterator:
             self.callbacks.on_epoch_begin()
             self.callbacks.on_batch_begin()
 
@@ -596,7 +604,7 @@ class Model:
             self.train_state.epoch += 1
             self.train_state.step += 1
             if self.train_state.step % display_every == 0 or i + 1 == iterations:
-                self._test()
+                self._test(iterator if use_tqdm else None)
 
             self.callbacks.on_batch_end()
             self.callbacks.on_epoch_end()
@@ -686,7 +694,7 @@ class Model:
             if self.stop_training:
                 break
 
-    def _test(self):
+    def _test(self, tqdm_pbar=None):
         (
             self.train_state.y_pred_train,
             self.train_state.loss_train,
@@ -728,7 +736,7 @@ class Model:
             or np.isnan(self.train_state.loss_test).any()
         ):
             self.stop_training = True
-        display.training_display(self.train_state)
+        display.training_display(self.train_state, tqdm_pbar)
 
     def predict(self, x, operator=None, callbacks=None):
         """Generates predictions for the input samples. If `operator` is ``None``,
